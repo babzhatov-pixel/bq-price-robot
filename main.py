@@ -77,6 +77,7 @@ def get_kaspi_price(product_name):
         )
 
         data = response.json()
+        return "DEBUG: " + str(data)[:300]
 
         products = data.get("data", [])
 
@@ -96,7 +97,7 @@ def get_kaspi_price(product_name):
 
     except Exception as e:
 
-        return "Ошибка API"
+       return "Ошибка API: " + str(e)[:200]
 
 # ---------- API ----------
 @app.route("/price")
