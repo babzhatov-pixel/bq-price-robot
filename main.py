@@ -7,6 +7,8 @@ import requests
 from bs4 import BeautifulSoup
 import re
 
+from playwright.sync_api import sync_playwright
+
 app = Flask(__name__)
 CORS(app)
 
@@ -24,7 +26,8 @@ def parse_number(value):
     number = re.sub(r"\D", "", str(value))
     return int(number) if number else 0
 
-def get_prices_debug(url, min_price):
+# ---------- PSPDF ----------
+def get_pspdf_price(url, min_price):
     try:
         headers = {
             "User-Agent": "Mozilla/5.0"
@@ -35,49 +38,101 @@ def get_prices_debug(url, min_price):
         all_text = soup.get_text(" ")
 
         prices = re.findall(r"\d[\d\s]{2,15}\s?₸", all_text)
+
         valid_prices = []
 
         for p in prices:
             value = parse_number(p)
+
             if value >= min_price and value < 5000000:
                 valid_prices.append(value)
 
         if valid_prices:
-            return format_price(min(valid_prices)), valid_prices
+            return format_price(min(valid_prices))
 
-        return "Не найдено", []
+        return "Не найдено"
+
+    except Exception:
+        return "Ошибка"
+
+# ---------- KASPI ----------
+def get_kaspi_price(url, min_price):
+    try:
+        with sync_playwright() as p:
+
+            browser = p.chromium.launch(headless=True)
+
+            page = browser.new_page()
+
+            page.goto(url, timeout=60000)
+
+            page.wait_for_timeout(5000)
+
+            text = page.content()
+
+            browser.close()
+
+            prices = re.findall(r"\d[\d\s]{2,15}\s?₸", text)
+
+            valid_prices = []
+
+            for p in prices:
+                value = parse_number(p)
+
+                if value >= min_price and value < 5000000:
+                    valid_prices.append(value)
+
+            if valid_prices:
+                return format_price(min(valid_prices))
+
+            return "Не найдено"
 
     except Exception as e:
-        return "Ошибка", [str(e)]
+        return "Ошибка"
 
+# ---------- API ----------
 @app.route("/price")
 def price():
+
     query = request.args.get("product", "").lower()
 
     response = urllib.request.urlopen(SHEET_URL)
     data = response.read().decode("utf-8")
+
     reader = csv.DictReader(StringIO(data))
 
     for row in reader:
+
         product_name = row.get("Товар", "").lower()
 
         if query in product_name:
+
             pspdf_link = row.get("Ссылка pspdf", "")
             kaspi_link = row.get("Ссылка Kaspi", "")
 
-            min_cash_price = parse_number(row.get("Минимальная цена наличка", "0"))
-            min_kaspi_price = parse_number(row.get("Минимальная цена каспи", "0"))
+            min_cash_price = parse_number(
+                row.get("Минимальная цена наличка", "0")
+            )
 
-            live_cash_price, pspdf_debug = get_prices_debug(pspdf_link, min_cash_price)
-            live_kaspi_price, kaspi_debug = get_prices_debug(kaspi_link, min_kaspi_price)
+            min_kaspi_price = parse_number(
+                row.get("Минимальная цена каспи", "0")
+            )
+
+            live_cash_price = get_pspdf_price(
+                pspdf_link,
+                min_cash_price
+            )
+
+            live_kaspi_price = get_kaspi_price(
+                kaspi_link,
+                min_kaspi_price
+            )
 
             return jsonify({
                 "product": row.get("Товар", ""),
-                "stock": row.get("КОЛВО", ""),
                 "cash_price": live_cash_price,
                 "kaspi_price": live_kaspi_price,
-                "kaspi_debug_prices": kaspi_debug,
-                "pspdf_debug_prices": pspdf_debug
+                "stock": row.get("КОЛВО", "")
             })
 
     return jsonify({
