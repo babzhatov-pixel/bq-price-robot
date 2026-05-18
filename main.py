@@ -59,26 +59,26 @@ def get_pspdf_price(url, min_price):
 def get_kaspi_price(url, min_price):
     try:
         with sync_playwright() as p:
+            browser = p.chromium.launch(
+                headless=True,
+                args=["--no-sandbox", "--disable-dev-shm-usage"]
+            )
 
-            browser = p.chromium.launch(headless=True)
+            page = browser.new_page(
+                user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            )
 
-            page = browser.new_page()
+            page.goto(url, wait_until="domcontentloaded", timeout=60000)
+            page.wait_for_timeout(7000)
 
-            page.goto(url, timeout=60000)
-
-            page.wait_for_timeout(5000)
-
-            text = page.content()
-
+            text = page.inner_text("body")
             browser.close()
 
             prices = re.findall(r"\d[\d\s]{2,15}\s?₸", text)
-
             valid_prices = []
 
             for p in prices:
                 value = parse_number(p)
-
                 if value >= min_price and value < 5000000:
                     valid_prices.append(value)
 
@@ -88,7 +88,7 @@ def get_kaspi_price(url, min_price):
             return "Не найдено"
 
     except Exception as e:
-        return "Ошибка: " + str(e)[:120]
+        return "Ошибка: " + str(e)[:200]
 
 # ---------- API ----------
 @app.route("/price")
