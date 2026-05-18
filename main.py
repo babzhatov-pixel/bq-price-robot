@@ -24,7 +24,7 @@ def parse_number(value):
     number = re.sub(r"\D", "", str(value))
     return int(number) if number else 0
 
-def get_pspdf_price(url, min_price):
+def get_price_from_site(url, min_price):
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
         response = requests.get(url, headers=headers, timeout=10)
@@ -60,14 +60,18 @@ def price():
 
         if query in product_name:
             pspdf_link = row.get("Ссылка pspdf", "")
-            min_cash_price = parse_number(row.get("Минимальная цена наличка", "0"))
+            kaspi_link = row.get("Ссылка Kaspi", "")
 
-            live_cash_price = get_pspdf_price(pspdf_link, min_cash_price)
+            min_cash_price = parse_number(row.get("Минимальная цена наличка", "0"))
+            min_kaspi_price = parse_number(row.get("Минимальная цена каспи", "0"))
+
+            live_cash_price = get_price_from_site(pspdf_link, min_cash_price)
+            live_kaspi_price = get_price_from_site(kaspi_link, min_kaspi_price)
 
             return jsonify({
                 "product": row.get("Товар", ""),
                 "cash_price": live_cash_price,
-                "kaspi_price": row.get("Наша цена Kaspi", ""),
+                "kaspi_price": live_kaspi_price,
                 "stock": row.get("КОЛВО", "")
             })
 
