@@ -88,7 +88,7 @@ def get_kaspi_price(url, min_price):
             return "Не найдено"
 
     except Exception as e:
-        return "Ошибка"
+        return "Ошибка: " + str(e)[:120]
 
 # ---------- API ----------
 @app.route("/price")
