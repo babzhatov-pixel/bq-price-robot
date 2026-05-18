@@ -59,28 +59,36 @@ def get_pspdf_price(url, min_price):
 def get_kaspi_price(url, min_price):
     try:
         with sync_playwright() as p:
+
             browser = p.chromium.launch(
                 headless=True,
-                args=["--no-sandbox", "--disable-dev-shm-usage"]
+                args=["--no-sandbox"]
             )
 
-            page = browser.new_page(
-                user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            )
+            page = browser.new_page()
 
-            page.goto(url, wait_until="domcontentloaded", timeout=60000)
+            page.goto(url, timeout=60000)
+
             page.wait_for_timeout(7000)
 
-            text = page.inner_text("body")
+            price_element = page.locator('[data-test-id="text"]')
+
+            texts = price_element.all_inner_texts()
+
             browser.close()
 
-            prices = re.findall(r"\d[\d\s]{2,15}\s?₸", text)
             valid_prices = []
 
-            for p in prices:
-                value = parse_number(p)
-                if value >= min_price and value < 5000000:
-                    valid_prices.append(value)
+            for text in texts:
+
+                prices = re.findall(r"\d[\d\s]{2,15}", text)
+
+                for p in prices:
+
+                    value = parse_number(p)
+
+                    if value >= min_price and value < 5000000:
+                        valid_prices.append(value)
 
             if valid_prices:
                 return format_price(min(valid_prices))
@@ -88,7 +96,7 @@ def get_kaspi_price(url, min_price):
             return "Не найдено"
 
     except Exception as e:
-        return "Ошибка: " + str(e)[:200]
+        return "Ошибка"
 
 # ---------- API ----------
 @app.route("/price")
