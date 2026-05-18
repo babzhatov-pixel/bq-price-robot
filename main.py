@@ -6,14 +6,15 @@ from io import StringIO
 import requests
 from bs4 import BeautifulSoup
 import re
-
-from playwright.sync_api import sync_playwright
+import os
 
 app = Flask(__name__)
 CORS(app)
 
 SHEET_ID = "1IVvCwJdkxtTNpWh8NKWloczlwuuqbyDcufe7uP9QAVM"
 SHEET_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
+
+KASPI_TOKEN = os.getenv("KASPI_API_TOKEN")
 
 @app.route("/")
 def home():
@@ -59,47 +60,43 @@ def get_pspdf_price(url, min_price):
     except Exception:
         return "Ошибка"
 
-# ---------- KASPI ----------
-def get_kaspi_price(url, min_price):
+# ---------- KASPI API ----------
+def get_kaspi_price(product_name):
 
     try:
 
-        with sync_playwright() as p:
+        headers = {
+            "X-Auth-Token": KASPI_TOKEN,
+            "Content-Type": "application/vnd.api+json"
+        }
 
-            browser = p.chromium.launch(
-                headless=True,
-                args=["--no-sandbox"]
-            )
+        response = requests.get(
+            "https://kaspi.kz/shop/api/v2/products",
+            headers=headers,
+            timeout=20
+        )
 
-            page = browser.new_page()
+        data = response.json()
 
-            page.goto(url, timeout=60000)
+        products = data.get("data", [])
 
-            page.wait_for_timeout(7000)
+        for product in products:
 
-            body_text = page.inner_text("body")
+            attributes = product.get("attributes", {})
 
-            prices = re.findall(r"\d[\d\s]{2,15}\s?₸", body_text)
+            title = attributes.get("name", "").lower()
 
-            valid_prices = []
+            if product_name.lower() in title:
 
-            for p in prices:
+                price = attributes.get("price", 0)
 
-                value = parse_number(p)
+                return format_price(price)
 
-                if value >= min_price and value < 5000000:
-                    valid_prices.append(value)
-
-            browser.close()
-
-            if valid_prices:
-                return format_price(min(valid_prices))
-
-            return "Не найдено: " + body_text[:500]
+        return "Не найдено"
 
     except Exception as e:
 
-        return "Ошибка: " + str(e)[:200]
+        return "Ошибка API"
 
 # ---------- API ----------
 @app.route("/price")
@@ -120,14 +117,9 @@ def price():
         if query in product_name:
 
             pspdf_link = row.get("Ссылка pspdf", "")
-            kaspi_link = row.get("Ссылка Kaspi", "")
 
             min_cash_price = parse_number(
                 row.get("Минимальная цена наличка", "0")
-            )
-
-            min_kaspi_price = parse_number(
-                row.get("Минимальная цена каспи", "0")
             )
 
             live_cash_price = get_pspdf_price(
@@ -136,8 +128,7 @@ def price():
             )
 
             live_kaspi_price = get_kaspi_price(
-                kaspi_link,
-                min_kaspi_price
+                row.get("Товар", "")
             )
 
             return jsonify({
