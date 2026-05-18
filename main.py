@@ -24,9 +24,12 @@ def parse_number(value):
     number = re.sub(r"\D", "", str(value))
     return int(number) if number else 0
 
-def get_price_from_site(url, min_price):
+def get_prices_debug(url, min_price):
     try:
-        headers = {"User-Agent": "Mozilla/5.0"}
+        headers = {
+            "User-Agent": "Mozilla/5.0"
+        }
+
         response = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(response.text, "html.parser")
         all_text = soup.get_text(" ")
@@ -40,12 +43,12 @@ def get_price_from_site(url, min_price):
                 valid_prices.append(value)
 
         if valid_prices:
-            return format_price(min(valid_prices))
+            return format_price(min(valid_prices)), valid_prices
 
-        return "Не найдено"
+        return "Не найдено", []
 
-    except Exception:
-        return "Ошибка"
+    except Exception as e:
+        return "Ошибка", [str(e)]
 
 @app.route("/price")
 def price():
@@ -65,14 +68,16 @@ def price():
             min_cash_price = parse_number(row.get("Минимальная цена наличка", "0"))
             min_kaspi_price = parse_number(row.get("Минимальная цена каспи", "0"))
 
-            live_cash_price = get_price_from_site(pspdf_link, min_cash_price)
-            live_kaspi_price = get_price_from_site(kaspi_link, min_kaspi_price)
+            live_cash_price, pspdf_debug = get_prices_debug(pspdf_link, min_cash_price)
+            live_kaspi_price, kaspi_debug = get_prices_debug(kaspi_link, min_kaspi_price)
 
             return jsonify({
                 "product": row.get("Товар", ""),
+                "stock": row.get("КОЛВО", ""),
                 "cash_price": live_cash_price,
                 "kaspi_price": live_kaspi_price,
-                "stock": row.get("КОЛВО", "")
+                "kaspi_debug_prices": kaspi_debug,
+                "pspdf_debug_prices": pspdf_debug
             })
 
     return jsonify({
