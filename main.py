@@ -22,10 +22,7 @@ def format_price(value):
 
 def get_pspdf_price(url):
     try:
-        headers = {
-            "User-Agent": "Mozilla/5.0"
-        }
-
+        headers = {"User-Agent": "Mozilla/5.0"}
         response = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(response.text, "html.parser")
         all_text = soup.get_text(" ")
@@ -36,21 +33,18 @@ def get_pspdf_price(url):
 
         for p in prices:
             number = re.sub(r'\D', '', p)
-
             if number:
                 value = int(number)
-
                 if 100000 < value < 5000000:
                     parsed_prices.append(value)
 
         if parsed_prices:
-            best_price = min(parsed_prices)
-            return format_price(best_price)
+            return format_price(min(parsed_prices)), parsed_prices
 
-        return "Не найдено"
+        return "Не найдено", []
 
     except Exception:
-        return "Ошибка"
+        return "Ошибка", []
 
 @app.route("/price")
 def price():
@@ -65,21 +59,22 @@ def price():
 
         if query in product_name:
             pspdf_link = row.get("Ссылка pspdf", "")
-
-            live_cash_price = get_pspdf_price(pspdf_link)
+            live_cash_price, debug_prices = get_pspdf_price(pspdf_link)
 
             return jsonify({
                 "product": row.get("Товар", ""),
                 "cash_price": live_cash_price,
                 "kaspi_price": row.get("Наша цена Kaspi", ""),
-                "stock": row.get("КОЛВО", "")
+                "stock": row.get("КОЛВО", ""),
+                "debug_prices": debug_prices
             })
 
     return jsonify({
         "product": query,
         "cash_price": "Не найдено",
         "kaspi_price": "Не найдено",
-        "stock": "0"
+        "stock": "0",
+        "debug_prices": []
     })
 
 if __name__ == "__main__":
