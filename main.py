@@ -17,6 +17,9 @@ SHEET_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=cs
 def home():
     return "BQ PRICE ROBOT SERVER IS WORKING"
 
+def format_price(value):
+    return f"{value:,}".replace(",", " ") + " ₸"
+
 def get_pspdf_price(url):
     try:
         headers = {
@@ -25,17 +28,28 @@ def get_pspdf_price(url):
 
         response = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(response.text, "html.parser")
+        all_text = soup.get_text(" ")
 
-        text = soup.get_text()
+        prices = re.findall(r'\d[\d\s]{2,15}\s?₸', all_text)
 
-        prices = re.findall(r'\d[\d\s]{3,15}₸', text)
+        parsed_prices = []
 
-        if prices:
-            return prices[0].strip()
+        for p in prices:
+            number = re.sub(r'\D', '', p)
+
+            if number:
+                value = int(number)
+
+                if 100000 < value < 5000000:
+                    parsed_prices.append(value)
+
+        if parsed_prices:
+            best_price = min(parsed_prices)
+            return format_price(best_price)
 
         return "Не найдено"
 
-    except:
+    except Exception:
         return "Ошибка"
 
 @app.route("/price")
@@ -50,9 +64,7 @@ def price():
         product_name = row.get("Товар", "").lower()
 
         if query in product_name:
-
             pspdf_link = row.get("Ссылка pspdf", "")
-            kaspi_link = row.get("Ссылка Kaspi", "")
 
             live_cash_price = get_pspdf_price(pspdf_link)
 
