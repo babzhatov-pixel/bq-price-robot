@@ -29,12 +29,15 @@ def parse_number(value):
 # ---------- PSPDF ----------
 def get_pspdf_price(url, min_price):
     try:
+
         headers = {
             "User-Agent": "Mozilla/5.0"
         }
 
         response = requests.get(url, headers=headers, timeout=10)
+
         soup = BeautifulSoup(response.text, "html.parser")
+
         all_text = soup.get_text(" ")
 
         prices = re.findall(r"\d[\d\s]{2,15}\s?₸", all_text)
@@ -42,6 +45,7 @@ def get_pspdf_price(url, min_price):
         valid_prices = []
 
         for p in prices:
+
             value = parse_number(p)
 
             if value >= min_price and value < 5000000:
@@ -57,7 +61,9 @@ def get_pspdf_price(url, min_price):
 
 # ---------- KASPI ----------
 def get_kaspi_price(url, min_price):
+
     try:
+
         with sync_playwright() as p:
 
             browser = p.chromium.launch(
@@ -71,32 +77,29 @@ def get_kaspi_price(url, min_price):
 
             page.wait_for_timeout(7000)
 
-            price_element = page.locator('[data-test-id="text"]')
+            body_text = page.inner_text("body")
 
-            texts = price_element.all_inner_texts()
-
-            browser.close()
+            prices = re.findall(r"\d[\d\s]{2,15}\s?₸", body_text)
 
             valid_prices = []
 
-            for text in texts:
+            for p in prices:
 
-                prices = re.findall(r"\d[\d\s]{2,15}", text)
+                value = parse_number(p)
 
-                for p in prices:
+                if value >= min_price and value < 5000000:
+                    valid_prices.append(value)
 
-                    value = parse_number(p)
-
-                    if value >= min_price and value < 5000000:
-                        valid_prices.append(value)
+            browser.close()
 
             if valid_prices:
                 return format_price(min(valid_prices))
 
-            return "Не найдено"
+            return "Не найдено: " + body_text[:500]
 
     except Exception as e:
-        return "Ошибка"
+
+        return "Ошибка: " + str(e)[:200]
 
 # ---------- API ----------
 @app.route("/price")
@@ -105,6 +108,7 @@ def price():
     query = request.args.get("product", "").lower()
 
     response = urllib.request.urlopen(SHEET_URL)
+
     data = response.read().decode("utf-8")
 
     reader = csv.DictReader(StringIO(data))
