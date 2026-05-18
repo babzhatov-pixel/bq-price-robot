@@ -20,31 +20,32 @@ def home():
 def format_price(value):
     return f"{value:,}".replace(",", " ") + " ₸"
 
-def get_pspdf_price(url):
+def parse_number(value):
+    number = re.sub(r"\D", "", str(value))
+    return int(number) if number else 0
+
+def get_pspdf_price(url, min_price):
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
         response = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(response.text, "html.parser")
         all_text = soup.get_text(" ")
 
-        prices = re.findall(r'\d[\d\s]{2,15}\s?₸', all_text)
-
-        parsed_prices = []
+        prices = re.findall(r"\d[\d\s]{2,15}\s?₸", all_text)
+        valid_prices = []
 
         for p in prices:
-            number = re.sub(r'\D', '', p)
-            if number:
-                value = int(number)
-                if 100000 < value < 5000000:
-                    parsed_prices.append(value)
+            value = parse_number(p)
+            if value >= min_price and value < 5000000:
+                valid_prices.append(value)
 
-        if parsed_prices:
-            return format_price(min(parsed_prices)), parsed_prices
+        if valid_prices:
+            return format_price(min(valid_prices))
 
-        return "Не найдено", []
+        return "Не найдено"
 
     except Exception:
-        return "Ошибка", []
+        return "Ошибка"
 
 @app.route("/price")
 def price():
@@ -59,22 +60,22 @@ def price():
 
         if query in product_name:
             pspdf_link = row.get("Ссылка pspdf", "")
-            live_cash_price, debug_prices = get_pspdf_price(pspdf_link)
+            min_cash_price = parse_number(row.get("Минимальная цена наличка", "0"))
+
+            live_cash_price = get_pspdf_price(pspdf_link, min_cash_price)
 
             return jsonify({
                 "product": row.get("Товар", ""),
                 "cash_price": live_cash_price,
                 "kaspi_price": row.get("Наша цена Kaspi", ""),
-                "stock": row.get("КОЛВО", ""),
-                "debug_prices": debug_prices
+                "stock": row.get("КОЛВО", "")
             })
 
     return jsonify({
         "product": query,
         "cash_price": "Не найдено",
         "kaspi_price": "Не найдено",
-        "stock": "0",
-        "debug_prices": []
+        "stock": "0"
     })
 
 if __name__ == "__main__":
